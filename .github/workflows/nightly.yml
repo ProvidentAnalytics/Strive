@@ -2,25 +2,24 @@ name: Dashboard Refresh
 
 on:
   schedule:
-    - cron: '0 6 * * *'    # 6AM UTC = midnight-1AM Central
-    - cron: '0 16 * * *'   # 4PM UTC = 11AM Central  
-    - cron: '0 21 * * *'   # 9PM UTC = 3PM Central
+    - cron: "0 6 * * *"
+    - cron: "0 16 * * *"
+    - cron: "0 21 * * *"
   workflow_dispatch:
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
-      - name: Pull data + build + push dashboard
+          python-version: "3.11"
+      - name: Pull data from CTM + build + push
         env:
           CTM_AUTH: ${{ secrets.CTM_AUTH }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: python nightly_pull.py
+        run: |
+          python pull_data.py
+          python build_clean.py
+          python push_dashboard.py

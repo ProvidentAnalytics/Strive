@@ -225,6 +225,62 @@ Chart.defaults.font.family = 'DM Sans';
 Chart.defaults.color = '#6b7e96';
 var CHARTS = {};
 
+// FIX 3: Bar value labels plugin — shows numbers on bars without hovering
+var barValuePlugin = {
+  id: 'barValues',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    chart.data.datasets.forEach(function(dataset, di) {
+      if (dataset.type === 'line') return;
+      var meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach(function(bar, idx) {
+        var val = dataset.data[idx];
+        if (!val || val === 0) return;
+        var label = val >= 1000 ? (val/1000).toFixed(1)+'k' : String(val);
+        var barH = Math.abs(bar.height || 0);
+        if (barH < 14) return;
+        ctx.save();
+        ctx.font = 'bold 8px Space Mono, monospace';
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, bar.x, bar.y + barH/2);
+        ctx.restore();
+      });
+    });
+  }
+};
+Chart.register(barValuePlugin);
+
+// FIX 3: Pie/donut label plugin — shows count on segments
+var pieValuePlugin = {
+  id: 'pieValues',
+  afterDatasetsDraw: function(chart) {
+    if (chart.config.type !== 'doughnut' && chart.config.type !== 'pie') return;
+    var ctx = chart.ctx;
+    var dataset = chart.data.datasets[0];
+    var total = dataset.data.reduce(function(a,b){return a+b;}, 0);
+    if (total === 0) return;
+    chart.getDatasetMeta(0).data.forEach(function(arc, i) {
+      var val = dataset.data[i];
+      if (!val || val/total < 0.04) return; // skip tiny slices
+      var angle = arc.startAngle + (arc.endAngle - arc.startAngle) / 2;
+      var r = (arc.outerRadius + arc.innerRadius) / 2;
+      var x = arc.x + Math.cos(angle) * r;
+      var y = arc.y + Math.sin(angle) * r;
+      ctx.save();
+      ctx.font = 'bold 9px Space Mono, monospace';
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(val.toLocaleString(), x, y);
+      ctx.restore();
+    });
+  }
+};
+Chart.register(pieValuePlugin);
+
 // FIX 3: Data label plugin — shows values on bars AND pie/donut segments
 var dataLabelPlugin = {
   id: 'dataLabels',
