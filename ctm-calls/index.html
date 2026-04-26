@@ -792,7 +792,8 @@ function buildSources() {
 
   // Daily by source — light colors, period-aware (FIX 5 + 7)
   document.getElementById('src-daily-wrap').innerHTML = scrollWrap('src-daily', 240, buckets.length);
-  mkChart('src-daily', {type:'line', data:{labels:buckets.map(b=>b.label), datasets:srcArr.slice(0,4).map(([k]) => {
+  // Build source daily datasets outside mkChart to avoid f-string nesting issues
+  const srcDailyDatasets = srcArr.slice(0,4).map(([k]) => {
     return {
       label: shortSrc(k),
       data: buckets.map(b => b.dates.reduce((s,d) => {
@@ -805,12 +806,21 @@ function buildSources() {
       }, 0)),
       borderColor:     SRC_BORDER[k]||'rgba(139,92,246,0.7)',
       backgroundColor: SRC_BG[k]||'rgba(139,92,246,0.08)',
-      borderWidth:2, pointRadius:2, tension:.3, fill:true
+      borderWidth:2, pointRadius:2, tension:0.3, fill:true
     };
-  })}}, options:{responsive:true, maintainAspectRatio:false,
-    plugins:{legend:{position:'bottom', labels:{font:{size:11},boxWidth:10,padding:10}}},
-    scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:8},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}
-  }});
+  });
+  mkChart('src-daily', {
+    type:'line',
+    data:{labels:buckets.map(b=>b.label), datasets:srcDailyDatasets},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom', labels:{font:{size:11},boxWidth:10,padding:10}}},
+      scales:{
+        x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:8},maxRotation:45}},
+        y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}
+      }
+    }
+  });
 
   // Tracking numbers
   const tns = FAC==='wl'?[

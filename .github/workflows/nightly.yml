@@ -1,9 +1,16 @@
-name: Nightly Dashboard Refresh
+name: Dashboard Refresh
 
 on:
   schedule:
-    - cron: "0 */4 * * *"   # Every 4 hours (midnight, 4AM, 8AM, noon, 4PM, 8PM UTC)
-  workflow_dispatch:          # Manual trigger from GitHub UI
+    # Central Time = UTC-5 (standard) / UTC-6 (daylight saving)
+    # Currently CDT (UTC-5), so:
+    # 11:00 AM CDT = 16:00 UTC
+    #  3:00 PM CDT = 20:00 UTC
+    #  7:00 PM CDT = 00:00 UTC (next day)
+    - cron: '0 16 * * *'   # 11:00 AM Central
+    - cron: '0 20 * * *'   #  3:00 PM Central
+    - cron: '0 0  * * *'   #  7:00 PM Central
+  workflow_dispatch:         # Manual trigger from GitHub Actions tab
 
 jobs:
   refresh:
@@ -15,10 +22,10 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install PyNaCl requests
+        run: pip install PyNaCl
 
       - name: Run dashboard builder
         env:
