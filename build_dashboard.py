@@ -353,14 +353,12 @@ def inject_data(split_json, daily_json, recs_json, log_json, forms_json, mkt_jso
 
     # Replace data placeholders
     replacements = {
-        '/*INJECT_SD*/':      f'const SD = {split_json};',
-        '/*INJECT_DAILY*/':   f'const DAILY_FULL = {daily_json};',
-        '/*INJECT_RECS*/':    f'const RECS = {recs_json};',
-        '/*INJECT_LOG*/':     f'const LOG = {log_json};',
-        '/*INJECT_FORMS*/':   f'const FORMS = {forms_json};',
-        '/*INJECT_MKT*/':     f'const MKT = {mkt_json};',
-        '/*INJECT_DATES*/':   f'const REPORT_START = "{start_date}"; const REPORT_END = "{end_date}";',
-        '/*INJECT_BUILT*/':   f'const BUILT_AT = "{datetime.now().strftime("%Y-%m-%d %H:%M UTC")}";',
+        'const SD = /*INJECT_SD*/;':          f'const SD = {split_json};',
+        'const DAILY_FULL = /*INJECT_DAILY*/;': f'const DAILY_FULL = {daily_json};',
+        'const RECS = /*INJECT_RECS*/;':      f'const RECS = {recs_json};',
+        'const LOG = /*INJECT_LOG*/;':        f'const LOG = {log_json};',
+        'const FORMS = /*INJECT_FORMS*/;':    f'const FORMS = {forms_json};',
+        'const MKT = /*INJECT_MKT*/;':        f'const MKT = {mkt_json};',
     }
     for placeholder, value in replacements.items():
         html = html.replace(placeholder, value)

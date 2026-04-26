@@ -612,7 +612,6 @@ function buildOverview() {
     wrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:220px"><canvas id="ov-daily"></canvas></div></div>`;
   }
 
-  updateScrollWidth('ov-daily-wrap', buckets.length, 32);
   mkChart('ov-daily',{type:'bar',data:{labels,datasets:[
     {label:'Inbound',  data:buckets.map(b=>aggFacVal(b.dates,'inbound')), backgroundColor:'rgba(10,61,92,.75)',  borderRadius:3,borderSkipped:false},
     {label:'Outbound', data:buckets.map(b=>aggFacVal(b.dates,'outbound')),backgroundColor:'rgba(61,255,192,.45)',borderRadius:3,borderSkipped:false},
@@ -789,7 +788,6 @@ function buildMissed() {
     const minW = Math.max(500, mssBuckets.length * 30);
     mssWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:200px"><canvas id="miss-daily"></canvas></div></div>`;
   }
-  updateScrollWidth('miss-daily-wrap', mssBuckets.length, 32);
   mkChart('miss-daily',{type:'bar',data:{labels:mssLabels,datasets:[{label:'Missed',data:DATES.map(d=>D.missed[d]||0),backgroundColor:mssBuckets.map(b=>{const v=aggFacVal(b.dates,'missed');return v>=7?'#ef4444':v>=4?'#f59e0b':'rgba(239,68,68,.4)'}),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:8},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
 }
 
@@ -827,7 +825,6 @@ function buildNewCallers() {
     const minW = Math.max(500, ncBuckets.length * 30);
     ncWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:220px"><canvas id="nc-daily"></canvas></div></div>`;
   }
-  updateScrollWidth('nc-daily-wrap', ncBuckets.length, 32);
   mkChart('nc-daily',{type:'line',data:{labels:ncLabels,datasets:[{label:'New Callers',data:ncBuckets.map(b=>aggFacVal(b.dates,'new')),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.08)',borderWidth:2.5,pointRadius:3,tension:.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:8},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
   mkChart('nc-dow',{type:'bar',data:{labels:DAYS_ORD.map(d=>d.slice(0,3)),datasets:[{label:'New Callers',data:DAYS_ORD.map(d=>ncDow[d]||0),backgroundColor:DAYS_ORD.map((_,i)=>i<5?'rgba(10,61,92,.75)':'rgba(61,255,192,.6)'),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
 
@@ -956,7 +953,6 @@ function buildFormCharts() {
     const minW = Math.max(500, sortedDates.length * 22);
     fmWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:200px"><canvas id="form-daily"></canvas></div></div>`;
   }
-  updateScrollWidth('form-daily-wrap', sortedDates.length, 24);
   mkChart('form-daily',{type:'bar',data:{labels:sortedDates.map(d=>{const[,m,day]=d.split('-');return`${parseInt(m)}/${parseInt(day)}`}),datasets:[{label:'Form Leads',data:sortedDates.map(d=>dateCounts[d]||0),backgroundColor:'rgba(10,61,92,.7)',borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:9},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true,stepSize:1}}}});
   mkChart('form-fac',{type:'doughnut',data:{labels:['Fort Wayne','Waterloo'],datasets:[{data:[fw,wl],backgroundColor:['#0a3d5c','#3dffc0'],borderWidth:3,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10,padding:10}}}}});
 }
@@ -983,7 +979,7 @@ function renderForms() {
 function doRefresh(){
   const btn=document.querySelector('.btn-refresh'),sp=document.getElementById('spinEl');
   btn.disabled=true;sp.classList.add('go');
-  setTimeout(()=>{document.getElementById('syncLbl').textContent='Data: /*INJECT_DATES*/ · Built /*INJECT_BUILT*/';btn.disabled=false;sp.classList.remove('go');},1400);
+  setTimeout(()=>{document.getElementById('syncLbl').textContent='Synced: '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});btn.disabled=false;sp.classList.remove('go');},1400);
 }
 
 
@@ -1029,7 +1025,6 @@ function buildMarketing() {
     const minW = Math.max(500, mktBuckets.length * 40);
     mktWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:220px"><canvas id="mkt-weekly"></canvas></div></div>`;
   }
-  updateScrollWidth('mkt-weekly-wrap', mktBuckets.length, 40);
   mkChart('mkt-weekly', {type:'line', data:{labels:mktLabels, datasets:[
     {label:'Total',    data:mktBuckets.map(b=>aggFacVal(b.dates,'total')),   borderColor:'#0a3d5c', backgroundColor:'rgba(10,61,92,.06)',  borderWidth:2.5, pointRadius:4, tension:.3, fill:true},
     {label:'Inbound',  data:mktBuckets.map(b=>aggFacVal(b.dates,'inbound')), borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.04)', borderWidth:2,   pointRadius:3, tension:.3, fill:false},
@@ -1099,9 +1094,9 @@ function buildMarketing() {
 
 function renderNotes() {
   const q = (document.getElementById('notes-search')?.value||'').toLowerCase();
-  const fac = FAC;
+  const notesFac = FAC;
   const filtered = MKT.notes.filter(n => {
-    const facOk = fac==='all'||n.fa===(fac==='fw'?'Fort Wayne':'Waterloo');
+    const facOk = notesFac==='all'||n.fa===(notesFac==='fw'?'Fort Wayne':'Waterloo');
     const txt = (n.n+n.ag).toLowerCase();
     return facOk && (!q||txt.includes(q));
   });
@@ -1151,15 +1146,6 @@ function getPeriodDates() {
 }
 
 // Aggregate dates by GRAN
-function updateScrollWidth(wrapId, numPoints, pxPerPoint) {
-  const wrap = document.getElementById(wrapId);
-  if(!wrap) return;
-  const inner = wrap.querySelector('div');
-  if(!inner) return;
-  const minW = Math.max(600, numPoints * (pxPerPoint || 28));
-  inner.style.minWidth = minW + 'px';
-}
-
 function aggregateDates(dates) {
   if(GRAN === 'day') return dates.map(d => ({label: fmtDateLabel(d), dates: [d]}));
   if(GRAN === 'week') {
@@ -1228,7 +1214,7 @@ function scrollChart(canvasId, numPoints) {
 
 // ═══════════════════════ BOOT ═══════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('syncLbl').textContent='Data: /*INJECT_DATES*/ · Built /*INJECT_BUILT*/';
+  document.getElementById('syncLbl').textContent='Synced: '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   buildSlicers();
   buildOverview();
   CHARTS['built_overview']=true;
