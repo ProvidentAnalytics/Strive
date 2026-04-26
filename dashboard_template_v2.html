@@ -209,7 +209,7 @@ var HMD   = /*INJECT_HMD*/null;
 
 // CONSTANTS
 var DAYS  = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-var HOURS = ['07AM','08AM','09AM','10AM','11AM','12PM','01PM','02PM','03PM','04PM','05PM','06PM','07PM','08PM'];
+var HOURS = ['12AM','01AM','02AM','03AM','04AM','05AM','06AM','07AM','08AM','09AM','10AM','11AM','12PM','01PM','02PM','03PM','04PM','05PM','06PM','07PM','08PM','09PM','10PM','11PM'];
 var TABS  = ['overview','agents','sources','heatmap','missed','facility','newcallers','recordings','calllog','forms','marketing'];
 var TAB_LABELS = ['Overview','Agent Performance','Sources & Attribution','Heatmap & Peak Hours','Missed Calls','Facility Split','New Callers / Leads','Recordings','Call Log','Contact Forms','Marketing & Trends'];
 var TAB_BADGES = {'calllog':'1,774','forms':'152'};
@@ -224,6 +224,90 @@ var SRC_COLOR = {
 Chart.defaults.font.family = 'DM Sans';
 Chart.defaults.color = '#6b7e96';
 var CHARTS = {};
+
+// FIX 3: Data label plugin — shows values on bars AND pie/donut segments
+var dataLabelPlugin = {
+  id: 'dataLabels',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    var chartType = chart.config.type;
+
+    // Bar charts
+    if (chartType === 'bar') {
+      chart.data.datasets.forEach(function(dataset, di) {
+        if (dataset.type === 'line') return;
+        var meta = chart.getDatasetMeta(di);
+        if (meta.hidden) return;
+        meta.data.forEach(function(bar, idx) {
+          var val = dataset.data[idx];
+          if (!val || val === 0) return;
+          var label = val >= 1000 ? (val/1000).toFixed(1)+'k' : String(val);
+          ctx.save();
+          ctx.font = 'bold 9px Space Mono, monospace';
+          ctx.fillStyle = 'rgba(255,255,255,0.92)';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          if (bar.height && bar.height > 14) {
+            ctx.fillText(label, bar.x, bar.y + bar.height / 2);
+          }
+          ctx.restore();
+        });
+      });
+    }
+
+    // Line charts — show value labels at data points
+    if (chartType === 'line') {
+      chart.data.datasets.forEach(function(dataset, di) {
+        if (dataset.label === 'Trend') return; // skip trend lines
+        var meta = chart.getDatasetMeta(di);
+        if (meta.hidden) return;
+        meta.data.forEach(function(point, idx) {
+          var val = dataset.data[idx];
+          if (!val || val === 0) return;
+          var label = val >= 1000 ? (val/1000).toFixed(1)+'k' : String(val);
+          ctx.save();
+          ctx.font = '8px Space Mono, monospace';
+          ctx.fillStyle = dataset.borderColor || '#0a3d5c';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(label, point.x, point.y - 4);
+          ctx.restore();
+        });
+      });
+    }
+
+    // Pie / Doughnut charts
+    if (chartType === 'doughnut' || chartType === 'pie') {
+      var total = chart.data.datasets[0].data.reduce(function(s,v){return s+(v||0);}, 0);
+      if (total === 0) return;
+      chart.data.datasets.forEach(function(dataset, di) {
+        var meta = chart.getDatasetMeta(di);
+        if (meta.hidden) return;
+        meta.data.forEach(function(arc, idx) {
+          var val = dataset.data[idx];
+          if (!val || val === 0) return;
+          var pct = Math.round(val / total * 100);
+          if (pct < 5) return; // skip tiny slices
+          var angle = (arc.startAngle + arc.endAngle) / 2;
+          var r = (arc.innerRadius + arc.outerRadius) / 2;
+          var x = arc.x + r * Math.cos(angle);
+          var y = arc.y + r * Math.sin(angle);
+          ctx.save();
+          ctx.font = 'bold 10px Space Mono, monospace';
+          ctx.fillStyle = 'rgba(255,255,255,0.95)';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(pct + '%', x, y - 5);
+          ctx.font = '8px Space Mono, monospace';
+          ctx.fillStyle = 'rgba(255,255,255,0.8)';
+          ctx.fillText(val.toLocaleString(), x, y + 6);
+          ctx.restore();
+        });
+      });
+    }
+  }
+};
+Chart.register(dataLabelPlugin);
 
 // STATE
 var FAC = 'all', PERIOD = '30d', GRAN = 'day';
