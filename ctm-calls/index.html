@@ -262,7 +262,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   <div id="ctrl-overview"></div>
   <div class="kpi-row" style="grid-template-columns:repeat(6,1fr)" id="ov-kpis"></div>
   <div class="g3">
-    <div class="card"><div class="card-h"><div><div class="card-title">Daily Call Volume</div><div class="card-sub">Inbound · Outbound · Missed</div></div><span class="chip">31 DAYS</span></div><div id="ov-daily-wrap"></div></div>
+    <div class="card"><div class="card-h"><div><div class="card-title">Daily Call Volume</div><div class="card-sub">Inbound · Outbound · Missed</div></div><span class="chip">31 DAYS</span></div><div class="chart-scroll-wrap" id="ov-daily-wrap"><div style="min-width:900px;height:220px"><canvas id="ov-daily"></canvas></div></div></div>
     <div class="card"><div class="card-h"><div><div class="card-title">Call Sources</div><div class="card-sub">Inbound attribution</div></div></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:center"><div style="height:150px"><canvas id="ov-source"></canvas></div><div class="src-leg" id="ov-src-leg"></div></div></div>
   </div>
   <div class="g2">
@@ -312,7 +312,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
     <div class="card"><div class="card-h"><div><div class="card-title">Missed Calls Log</div><div class="card-sub">Most recent first</div></div><span class="chip" id="ms-chip"></span></div><div class="missed-list" id="missed-list"></div></div>
     <div class="card">
       <div class="card-h"><div><div class="card-title">Daily Missed Trend</div></div></div>
-      <div id="miss-daily-wrap"></div>
+      <div class="chart-scroll-wrap" id="miss-daily-wrap"><div style="min-width:900px;height:200px"><canvas id="miss-daily"></canvas></div></div>
       <div style="margin-top:20px;display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(16,185,129,.06);border-radius:8px;border-left:3px solid var(--green)"><div style="font-size:18px">⚡</div><div><div style="font-size:12px;font-weight:700;color:var(--navy)">15-min callback SLA</div><div style="font-size:11px;color:var(--muted)">Call back within 15 min of missed call</div></div></div>
         <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(245,158,11,.06);border-radius:8px;border-left:3px solid var(--amber)"><div style="font-size:18px">📞</div><div><div style="font-size:12px;font-weight:700;color:var(--navy)">2 follow-up attempts</div><div style="font-size:11px;color:var(--muted)">Minimum 2 outbound attempts per missed call</div></div></div>
@@ -340,7 +340,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   <div id="ctrl-newcallers"></div>
   <div class="kpi-row" style="grid-template-columns:repeat(4,1fr)" id="nc-kpis"></div>
   <div class="g2">
-    <div class="card"><div class="card-h"><div><div class="card-title">New Callers Daily Trend</div></div></div><div id="nc-daily-wrap"></div></div>
+    <div class="card"><div class="card-h"><div><div class="card-title">New Callers Daily Trend</div></div></div><div class="chart-scroll-wrap" id="nc-daily-wrap"><div style="min-width:900px;height:220px"><canvas id="nc-daily"></canvas></div></div></div>
     <div class="card"><div class="card-h"><div><div class="card-title">New Callers by Day of Week</div></div></div><div style="height:220px"><canvas id="nc-dow"></canvas></div></div>
   </div>
   <div class="g2">
@@ -401,7 +401,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   <div id="ctrl-forms"></div>
   <div class="kpi-row" style="grid-template-columns:repeat(4,1fr)" id="fm-kpis"></div>
   <div class="g2">
-    <div class="card"><div class="card-h"><div><div class="card-title">Form Submissions Over Time</div></div></div><div id="form-daily-wrap"></div></div>
+    <div class="card"><div class="card-h"><div><div class="card-title">Form Submissions Over Time</div></div></div><div class="chart-scroll-wrap" id="form-daily-wrap"><div style="min-width:700px;height:200px"><canvas id="form-daily"></canvas></div></div></div>
     <div class="card"><div class="card-h"><div><div class="card-title">Forms by Facility</div></div></div><div style="height:200px"><canvas id="form-fac"></canvas></div></div>
   </div>
   <div class="g1"><div class="card">
@@ -427,7 +427,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   <div class="g2">
     <div class="card">
       <div class="card-h"><div><div class="card-title">Weekly Call Volume Trend</div><div class="card-sub">Total · Inbound · New Callers · Missed</div></div><span class="chip">5 WEEKS</span></div>
-      <div id="mkt-weekly-wrap"></div>
+      <div class="chart-scroll-wrap" id="mkt-weekly-wrap"><div style="min-width:900px;height:220px"><canvas id="mkt-weekly"></canvas></div></div>
     </div>
     <div class="card">
       <div class="card-h"><div><div class="card-title">Weekly Lead Score (Yes / No)</div><div class="card-sub">CTM AI-scored call outcomes per week</div></div></div>
@@ -566,7 +566,11 @@ function showTab(name,btn) {
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
-  if(!CHARTS['built_'+name]){ CHARTS['built_'+name]=true; buildTab(name); }
+  // Use requestAnimationFrame so tab is visible before Chart.js renders
+  requestAnimationFrame(() => {
+    if(!CHARTS['built_'+name]){ CHARTS['built_'+name]=true; buildTab(name); }
+    else if(name==='marketing' || name==='overview') { CHARTS['built_'+name]=false; buildTab(name); CHARTS['built_'+name]=true; }
+  });
 }
 
 function buildTab(n) {
@@ -779,15 +783,9 @@ function buildMissed() {
   document.getElementById('ms-chip').textContent = missedLog.length+' TOTAL';
   document.getElementById('missed-list').innerHTML = missedLog.map(m=>`<div class="mitem"><div class="mtime">${m.time}</div><div class="mcaller">${m.caller}</div><div class="msrc">${m.source}</div></div>`).join('');
 
-  // Scrollable missed chart
   const mssDates = getPeriodDates();
   const mssBuckets = aggregateDates(mssDates);
   const mssLabels = mssBuckets.map(b=>b.label);
-  const mssWrap = document.getElementById('miss-daily-wrap');
-  if(mssWrap) {
-    const minW = Math.max(500, mssBuckets.length * 30);
-    mssWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:200px"><canvas id="miss-daily"></canvas></div></div>`;
-  }
   mkChart('miss-daily',{type:'bar',data:{labels:mssLabels,datasets:[{label:'Missed',data:DATES.map(d=>D.missed[d]||0),backgroundColor:mssBuckets.map(b=>{const v=aggFacVal(b.dates,'missed');return v>=7?'#ef4444':v>=4?'#f59e0b':'rgba(239,68,68,.4)'}),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:8},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
 }
 
@@ -816,15 +814,9 @@ function buildNewCallers() {
     kpiHTML('New Caller Rate', ib>0?(total/ib*100).toFixed(1)+'%':'0%', 'Of inbound', 'c-teal') +
     kpiHTML('Peak Day', `<span style="font-size:20px">${peakDay}</span>`, `${ncDow[peakDay]||0} new callers`, 'c-blue');
 
-  // Scrollable NC chart
   const ncDates = getPeriodDates();
   const ncBuckets = aggregateDates(ncDates);
   const ncLabels = ncBuckets.map(b=>b.label);
-  const ncWrap = document.getElementById('nc-daily-wrap');
-  if(ncWrap) {
-    const minW = Math.max(500, ncBuckets.length * 30);
-    ncWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:220px"><canvas id="nc-daily"></canvas></div></div>`;
-  }
   mkChart('nc-daily',{type:'line',data:{labels:ncLabels,datasets:[{label:'New Callers',data:ncBuckets.map(b=>aggFacVal(b.dates,'new')),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.08)',borderWidth:2.5,pointRadius:3,tension:.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:8},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
   mkChart('nc-dow',{type:'bar',data:{labels:DAYS_ORD.map(d=>d.slice(0,3)),datasets:[{label:'New Callers',data:DAYS_ORD.map(d=>ncDow[d]||0),backgroundColor:DAYS_ORD.map((_,i)=>i<5?'rgba(10,61,92,.75)':'rgba(61,255,192,.6)'),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
 
@@ -948,11 +940,7 @@ function buildFormCharts() {
   const dateCounts={};
   fms.forEach(f=>{const d=f.dt.slice(0,10);dateCounts[d]=(dateCounts[d]||0)+1;});
   const sortedDates=Object.keys(dateCounts).sort();
-  const fmWrap = document.getElementById('form-daily-wrap');
-  if(fmWrap) {
-    const minW = Math.max(500, sortedDates.length * 22);
-    fmWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:200px"><canvas id="form-daily"></canvas></div></div>`;
-  }
+  // form-daily canvas pre-rendered
   mkChart('form-daily',{type:'bar',data:{labels:sortedDates.map(d=>{const[,m,day]=d.split('-');return`${parseInt(m)}/${parseInt(day)}`}),datasets:[{label:'Form Leads',data:sortedDates.map(d=>dateCounts[d]||0),backgroundColor:'rgba(10,61,92,.7)',borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:9},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true,stepSize:1}}}});
   mkChart('form-fac',{type:'doughnut',data:{labels:['Fort Wayne','Waterloo'],datasets:[{data:[fw,wl],backgroundColor:['#0a3d5c','#3dffc0'],borderWidth:3,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10,padding:10}}}}});
 }
@@ -1020,11 +1008,7 @@ function buildMarketing() {
   const mktDates = getPeriodDates();
   const mktBuckets = aggregateDates(mktDates);
   const mktLabels = mktBuckets.map(b=>b.label);
-  const mktWrap = document.getElementById('mkt-weekly-wrap');
-  if(mktWrap) {
-    const minW = Math.max(500, mktBuckets.length * 40);
-    mktWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:220px"><canvas id="mkt-weekly"></canvas></div></div>`;
-  }
+  // canvas pre-rendered in HTML
   mkChart('mkt-weekly', {type:'line', data:{labels:mktLabels, datasets:[
     {label:'Total',    data:mktBuckets.map(b=>aggFacVal(b.dates,'total')),   borderColor:'#0a3d5c', backgroundColor:'rgba(10,61,92,.06)',  borderWidth:2.5, pointRadius:4, tension:.3, fill:true},
     {label:'Inbound',  data:mktBuckets.map(b=>aggFacVal(b.dates,'inbound')), borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,.04)', borderWidth:2,   pointRadius:3, tension:.3, fill:false},
