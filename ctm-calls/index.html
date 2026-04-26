@@ -566,7 +566,6 @@ function showTab(name,btn) {
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
-  // Use requestAnimationFrame so tab is visible before Chart.js renders
   requestAnimationFrame(() => {
     if(!CHARTS['built_'+name]){ CHARTS['built_'+name]=true; buildTab(name); }
     else if(name==='marketing' || name==='overview') { CHARTS['built_'+name]=false; buildTab(name); CHARTS['built_'+name]=true; }
@@ -783,9 +782,15 @@ function buildMissed() {
   document.getElementById('ms-chip').textContent = missedLog.length+' TOTAL';
   document.getElementById('missed-list').innerHTML = missedLog.map(m=>`<div class="mitem"><div class="mtime">${m.time}</div><div class="mcaller">${m.caller}</div><div class="msrc">${m.source}</div></div>`).join('');
 
+  // Scrollable missed chart
   const mssDates = getPeriodDates();
   const mssBuckets = aggregateDates(mssDates);
   const mssLabels = mssBuckets.map(b=>b.label);
+  const mssWrap = document.getElementById('miss-daily-wrap');
+  if(mssWrap) {
+    const minW = Math.max(500, mssBuckets.length * 30);
+    mssWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:200px"><canvas id="miss-daily"></canvas></div></div>`;
+  }
   mkChart('miss-daily',{type:'bar',data:{labels:mssLabels,datasets:[{label:'Missed',data:DATES.map(d=>D.missed[d]||0),backgroundColor:mssBuckets.map(b=>{const v=aggFacVal(b.dates,'missed');return v>=7?'#ef4444':v>=4?'#f59e0b':'rgba(239,68,68,.4)'}),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:8},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
 }
 
@@ -814,9 +819,15 @@ function buildNewCallers() {
     kpiHTML('New Caller Rate', ib>0?(total/ib*100).toFixed(1)+'%':'0%', 'Of inbound', 'c-teal') +
     kpiHTML('Peak Day', `<span style="font-size:20px">${peakDay}</span>`, `${ncDow[peakDay]||0} new callers`, 'c-blue');
 
+  // Scrollable NC chart
   const ncDates = getPeriodDates();
   const ncBuckets = aggregateDates(ncDates);
   const ncLabels = ncBuckets.map(b=>b.label);
+  const ncWrap = document.getElementById('nc-daily-wrap');
+  if(ncWrap) {
+    const minW = Math.max(500, ncBuckets.length * 30);
+    ncWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:220px"><canvas id="nc-daily"></canvas></div></div>`;
+  }
   mkChart('nc-daily',{type:'line',data:{labels:ncLabels,datasets:[{label:'New Callers',data:ncBuckets.map(b=>aggFacVal(b.dates,'new')),borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.08)',borderWidth:2.5,pointRadius:3,tension:.3,fill:true}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:8},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
   mkChart('nc-dow',{type:'bar',data:{labels:DAYS_ORD.map(d=>d.slice(0,3)),datasets:[{label:'New Callers',data:DAYS_ORD.map(d=>ncDow[d]||0),backgroundColor:DAYS_ORD.map((_,i)=>i<5?'rgba(10,61,92,.75)':'rgba(61,255,192,.6)'),borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{size:11}}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}}});
 
@@ -940,7 +951,11 @@ function buildFormCharts() {
   const dateCounts={};
   fms.forEach(f=>{const d=f.dt.slice(0,10);dateCounts[d]=(dateCounts[d]||0)+1;});
   const sortedDates=Object.keys(dateCounts).sort();
-  // form-daily canvas pre-rendered
+  const fmWrap = document.getElementById('form-daily-wrap');
+  if(fmWrap) {
+    const minW = Math.max(500, sortedDates.length * 22);
+    fmWrap.innerHTML = `<div class="chart-scroll-wrap"><div style="min-width:${minW}px;height:200px"><canvas id="form-daily"></canvas></div></div>`;
+  }
   mkChart('form-daily',{type:'bar',data:{labels:sortedDates.map(d=>{const[,m,day]=d.split('-');return`${parseInt(m)}/${parseInt(day)}`}),datasets:[{label:'Form Leads',data:sortedDates.map(d=>dateCounts[d]||0),backgroundColor:'rgba(10,61,92,.7)',borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:9},maxRotation:45}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true,stepSize:1}}}});
   mkChart('form-fac',{type:'doughnut',data:{labels:['Fort Wayne','Waterloo'],datasets:[{data:[fw,wl],backgroundColor:['#0a3d5c','#3dffc0'],borderWidth:3,borderColor:'#fff'}]},options:{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10,padding:10}}}}});
 }
@@ -967,7 +982,7 @@ function renderForms() {
 function doRefresh(){
   const btn=document.querySelector('.btn-refresh'),sp=document.getElementById('spinEl');
   btn.disabled=true;sp.classList.add('go');
-  setTimeout(()=>{document.getElementById('syncLbl').textContent='Data: const REPORT_START = "2026-03-27"; const REPORT_END = "2026-04-26"; · Built const BUILT_AT = "2026-04-26 06:49 UTC";';btn.disabled=false;sp.classList.remove('go');},1400);
+  setTimeout(()=>{document.getElementById('syncLbl').textContent='Data: const REPORT_START = "2026-03-27"; const REPORT_END = "2026-04-26"; · Built const BUILT_AT = "2026-04-26 07:01 UTC";';btn.disabled=false;sp.classList.remove('go');},1400);
 }
 
 
@@ -1020,9 +1035,9 @@ function buildMarketing() {
   }});
 
   // Weekly yes/no
-  mkChart('mkt-yesno', {type:'bar', data:{labels:mktLabels, datasets:[
-    {label:'Yes (Lead)', data:mktBuckets.map(b=>b.dates.reduce((s,d)=>s+(MKT.sale_daily[d]?.yes||0),0)), backgroundColor:'rgba(16,185,129,.75)', borderRadius:4, borderSkipped:false},
-    {label:'No',         data:mktBuckets.map(b=>b.dates.reduce((s,d)=>s+(MKT.sale_daily[d]?.no||0),0)),  backgroundColor:'rgba(239,68,68,.55)',  borderRadius:4, borderSkipped:false}
+  mkChart('mkt-yesno', {type:'bar', data:{labels:wkLabels, datasets:[
+    {label:'Yes (Lead)', data:weeks.map(w=>MKT.weekly[w]?.yes||0), backgroundColor:'rgba(16,185,129,.75)', borderRadius:4, borderSkipped:false},
+    {label:'No',         data:weeks.map(w=>MKT.weekly[w]?.no||0),  backgroundColor:'rgba(239,68,68,.55)',  borderRadius:4, borderSkipped:false}
   ]}, options:{responsive:true,maintainAspectRatio:false,
     plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10,padding:10}}},
     scales:{x:{grid:{display:false},ticks:{font:{family:'Space Mono',size:10}}},y:{grid:{color:'rgba(225,231,239,.6)'},ticks:{font:{family:'Space Mono',size:9}},beginAtZero:true}}
@@ -1078,9 +1093,9 @@ function buildMarketing() {
 
 function renderNotes() {
   const q = (document.getElementById('notes-search')?.value||'').toLowerCase();
-  const notesFac = FAC;
+  const fac = FAC;
   const filtered = MKT.notes.filter(n => {
-    const facOk = notesFac==='all'||n.fa===(notesFac==='fw'?'Fort Wayne':'Waterloo');
+    const facOk = fac==='all'||n.fa===(fac==='fw'?'Fort Wayne':'Waterloo');
     const txt = (n.n+n.ag).toLowerCase();
     return facOk && (!q||txt.includes(q));
   });
@@ -1198,7 +1213,7 @@ function scrollChart(canvasId, numPoints) {
 
 // ═══════════════════════ BOOT ═══════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
-  document.getElementById('syncLbl').textContent='Data: const REPORT_START = "2026-03-27"; const REPORT_END = "2026-04-26"; · Built const BUILT_AT = "2026-04-26 06:49 UTC";';
+  document.getElementById('syncLbl').textContent='Data: const REPORT_START = "2026-03-27"; const REPORT_END = "2026-04-26"; · Built const BUILT_AT = "2026-04-26 07:01 UTC";';
   buildSlicers();
   buildOverview();
   CHARTS['built_overview']=true;
