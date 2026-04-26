@@ -23,9 +23,9 @@ GH_BRANCH = 'main'
 
 BASE_URL  = f'https://api.calltrackingmetrics.com/api/v1/accounts/{CTM_ACCT}'
 
-# Date range: last 31 days
+# Date range: Nov 1 2025 to today (full history)
 END_DATE   = datetime.now().strftime('%Y-%m-%d')
-START_DATE = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+START_DATE = '2025-11-01'
 
 print(f"Building dashboard for {START_DATE} to {END_DATE}")
 
