@@ -1,278 +1,145 @@
 """
-process_data.py
-Processes raw CTM data into clean JSON blobs for the dashboard.
-Run once to generate all data files, or call from build_dashboard.py
+process_data.py — CI/CD version
+Pulls fresh data from CTM API and writes all data JSON files.
+Called by the GitHub Actions workflow before build_clean.py.
 """
-import json
+import urllib.request, json, time, os
 from collections import defaultdict, Counter
+from datetime import datetime, timedelta
+
+# ── Config ──────────────────────────────────────────────────────────────
+CTM_AUTH = os.environ.get('CTM_AUTH', '')
+CTM_ACCT = '559323'
+BASE_URL = f'https://api.calltrackingmetrics.com/api/v1/accounts/{CTM_ACCT}'
+
+END_DATE   = datetime.now().strftime('%Y-%m-%d')
+START_DATE = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+
+print(f"Period: {START_DATE} → {END_DATE}")
+
+# ── CTM fetch ────────────────────────────────────────────────────────────
+def ctm_get(path, params=''):
+    url = f'{BASE_URL}{path}?{params}'
+    req = urllib.request.Request(url, headers={'Authorization': f'Basic {CTM_AUTH}', 'User-Agent': 'StriveAnalytics/2.0'})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read())
+
+def pull_calls():
+    data = ctm_get('/calls', f'format=json&page_size=100&start_date={START_DATE}&end_date={END_DATE}&page=1')
+    total_pages = data['total_pages']
+    print(f"Pulling {data['total_entries']} calls across {total_pages} pages...")
+    calls = data.get('calls', [])
+    for page in range(2, total_pages + 1):
+        data = ctm_get('/calls', f'format=json&page_size=100&start_date={START_DATE}&end_date={END_DATE}&page={page}')
+        calls.extend(data.get('calls', []))
+        if page % 20 == 0: print(f"  Page {page}/{total_pages}...")
+        time.sleep(0.1)
+    print(f"  Done: {len(calls)} calls")
+    return calls
+
+def pull_forms():
+    data = ctm_get('/calls', 'format=json&page_size=10&direction=form&page=1')
+    forms = data.get('calls', [])
+    for page in range(2, data['total_pages'] + 1):
+        forms.extend(ctm_get('/calls', f'format=json&page_size=10&direction=form&page={page}').get('calls', []))
+        time.sleep(0.1)
+    print(f"  Forms: {len(forms)}")
+    return forms
+
+# ── Import and run processing ─────────────────────────────────────────────
+from process_data import process_all
 
 def get_fac(c):
-    return 'fw' if (c.get('tracking_number_bare','') or '').startswith('260') else 'wl'
+    return 'fw' if (c.get('tracking_number_bare', '') or '').startswith('260') else 'wl'
 
-def process_all(calls, forms_raw):
-    """Master processing function. Returns all data dicts needed by dashboard."""
-
-    # ── 1. DAILY FULL (one row per day, all metrics) ──────────────────────
-    daily = defaultdict(lambda: {
-        'total':0,'inbound':0,'outbound':0,'missed':0,'new':0,
-        'fw_total':0,'fw_inbound':0,'fw_missed':0,'fw_new':0,
-        'wl_total':0,'wl_inbound':0,'wl_missed':0,'wl_new':0,
-        'yes':0,'no':0,'lead':0,'dur_sum':0,'dur_n':0,'src':{}
-    })
-
-    # ── 2. SPLIT DATA (pre-aggregated for charts) ─────────────────────────
-    daily_all = {'total':Counter(),'inbound':Counter(),'missed':Counter(),'new':Counter()}
-    daily_fw  = {'total':Counter(),'inbound':Counter(),'missed':Counter(),'new':Counter()}
-    daily_wl  = {'total':Counter(),'inbound':Counter(),'missed':Counter(),'new':Counter()}
-
-    dow_all = Counter(); dow_fw = Counter(); dow_wl = Counter()
-    hm_all  = Counter(); hm_fw  = Counter(); hm_wl  = Counter()
-    src_all = Counter(); src_fw = Counter(); src_wl = Counter()
-    nc_dow_all = Counter(); nc_dow_fw = Counter(); nc_dow_wl = Counter()
-    nc_hr_all  = Counter(); nc_hr_fw  = Counter(); nc_hr_wl  = Counter()
-    missed_log = []
-    agent_stats = defaultdict(lambda: {
-        'total':0,'inbound':0,'outbound':0,'answered':0,'missed':0,
-        'dur':0,'dur_n':0,'fw':0,'wl':0
-    })
-
-    # ── 3. MARKETING DATA ─────────────────────────────────────────────────
-    disposition  = Counter()
-    disp_by_fac  = defaultdict(Counter)
-    sale_daily   = defaultdict(lambda: {'yes':0,'no':0,'lead':0})
-    pages        = Counter()
-    refs         = Counter()
-    notes        = []
-
-    for c in calls:
-        d    = c['called_at'][:10]
-        fac  = get_fac(c)
-        is_ib   = c['direction'] == 'inbound'
-        is_ob   = c['direction'] == 'outbound'
-        is_miss = c.get('dial_status','') in ('no-answer','busy','no answer') and is_ib
-        is_new  = bool(c.get('is_new_caller')) and is_ib
-        src     = c.get('source','Unknown')
-        day     = c.get('day','')
-        hour    = c.get('hour','')
-        dur     = c.get('duration',0) or 0
-        sale    = (c.get('sale') or {}).get('name','').lower().strip()
-        cf      = c.get('custom_fields') or {}
-
-        # ── Daily full ──
-        r = daily[d]
-        r['total'] += 1
-        if is_ib:   r['inbound']  += 1
-        if is_ob:   r['outbound'] += 1
-        if is_miss: r['missed']   += 1
-        if is_new:  r['new']      += 1
-        if dur > 0: r['dur_sum']  += dur; r['dur_n'] += 1
-        r[f'{fac}_total'] += 1
-        if is_ib:   r[f'{fac}_inbound'] += 1
-        if is_miss: r[f'{fac}_missed']  += 1
-        if is_new:  r[f'{fac}_new']     += 1
-        if sale == 'yes':    r['yes']  += 1
-        elif sale == 'no':   r['no']   += 1
-        elif 'lead' in sale: r['lead'] += 1
-        r['src'][src] = r['src'].get(src, 0) + 1
-
-        # ── Split data daily ──
-        for ds in [daily_all, daily_fw if fac=='fw' else daily_wl]:
-            ds['total'][d]   += 1
-            if is_ib:   ds['inbound'][d]  += 1
-            if is_miss: ds['missed'][d]   += 1
-            if is_new:  ds['new'][d]      += 1
-
-        # ── DOW ──
-        dow_all[day] += 1
-        (dow_fw if fac=='fw' else dow_wl)[day] += 1
-
-        # ── Heatmap (inbound only) ──
-        if is_ib and day and hour:
-            key = f'{day}|{hour}'
-            hm_all[key] += 1
-            (hm_fw if fac=='fw' else hm_wl)[key] += 1
-
-        # ── Sources (inbound only) ──
-        if is_ib:
-            src_all[src] += 1
-            (src_fw if fac=='fw' else src_wl)[src] += 1
-
-        # ── New callers breakdown ──
-        if is_new:
-            nc_dow_all[day] += 1
-            (nc_dow_fw if fac=='fw' else nc_dow_wl)[day] += 1
-            nc_hr_all[hour] += 1
-            (nc_hr_fw if fac=='fw' else nc_hr_wl)[hour] += 1
-
-        # ── Missed log ──
-        if is_miss:
-            missed_log.append({
-                'time':   c['called_at'][:16],
-                'caller': c.get('caller_number_format',''),
-                'source': src,
-                'fa':     'Fort Wayne' if fac=='fw' else 'Waterloo'
-            })
-
-        # ── Agent stats ──
-        ag = (c.get('agent') or {}).get('name','')
-        if ag:
-            s = agent_stats[ag]
-            s['total'] += 1; s[fac] += 1
-            if is_ib: s['inbound']  += 1
-            if is_ob: s['outbound'] += 1
-            status = c.get('dial_status','')
-            if status in ('answered','completed'):
-                s['answered'] += 1; s['dur'] += dur; s['dur_n'] += 1
-            elif status in ('no-answer','busy','no answer'):
-                s['missed'] += 1
-
-        # ── Disposition ──
-        disp = cf.get('disposition_save_to_contact','')
-        if disp:
-            disposition[disp] += 1
-            disp_by_fac['Fort Wayne' if fac=='fw' else 'Waterloo'][disp] += 1
-
-        # ── Sale daily ──
-        sd = sale_daily[d]
-        if sale == 'yes':    sd['yes']  += 1
-        elif sale == 'no':   sd['no']   += 1
-        elif 'lead' in sale: sd['lead'] += 1
-
-        # ── Landing pages ──
-        loc = (c.get('last_location','') or '').split('?')[0].rstrip('/')
-        if loc:
-            label = (loc
-                .replace('https://www.striverehabfortwayne.com','FW')
-                .replace('https://www.striverehabwaterloo.com','WL'))
-            pages[label] += 1
-
-        # ── Referrers ──
-        ref = c.get('referrer','') or ''
-        if ref:
-            try:
-                domain = ref.split('/')[2] if '//' in ref else ref
-                refs[domain] += 1
-            except: pass
-
-        # ── Notes ──
-        note = (c.get('notes','') or '').strip()
-        if note:
-            notes.append({
-                'dt': c['called_at'][:16],
-                'ag': ag,
-                'n':  note[:150],
-                'fa': 'Fort Wayne' if fac=='fw' else 'Waterloo'
-            })
-
-    # ── 4. RECORDINGS ────────────────────────────────────────────────────
-    recordings = []
-    for c in calls:
-        if c['direction'] != 'inbound': continue
-        tr = (c.get('transcription_text','') or '').strip()
-        if not tr: continue
-        fac   = get_fac(c)
-        dur_s = c.get('duration',0) or 0
-        recordings.append({
-            'c':  ((c.get('name','') or c.get('cnam','') or c.get('caller_number_format','')) or '')[:28],
-            'p':  c.get('caller_number_format',''),
-            't':  c['called_at'][:16],
-            'd':  f"{dur_s//60}m {dur_s%60}s" if dur_s >= 60 else f"{dur_s}s",
-            'ds': dur_s,
-            'a':  (c.get('agent') or {}).get('name',''),
-            's':  c.get('source',''),
-            'f':  'Fort Wayne' if fac=='fw' else 'Waterloo',
-            'su': (c.get('summary','') or '')[:120],
-            'tr': tr[:300],
-            'au': c.get('audio','') or ''
-        })
-
-    # ── 5. CALL LOG ──────────────────────────────────────────────────────
-    call_log = []
-    for c in calls:
-        fac = get_fac(c)
-        call_log.append({
-            'dt': c['called_at'][:16],
-            'di': c['direction'],
-            'st': c.get('dial_status', c.get('call_status','')),
-            'cl': c.get('caller_number_format',''),
-            'nm': ((c.get('name','') or c.get('cnam','')) or '')[:30],
-            'ci': c.get('city','') or '',
-            'sa': c.get('state','') or '',
-            'sr': c.get('source',''),
-            'ag': (c.get('agent') or {}).get('name',''),
-            'du': c.get('duration',0) or 0,
-            'nw': bool(c.get('is_new_caller',False)),
-            'tr': bool(tr),
-            'fa': 'Fort Wayne' if fac=='fw' else 'Waterloo'
-        })
-
-    # ── 6. FORMS ─────────────────────────────────────────────────────────
+def process_forms_raw(forms_raw):
     forms_clean = []
     for f in forms_raw:
-        fa = 'Fort Wayne' if (f.get('fa','') == 'Fort Wayne') else 'Waterloo'
+        tn = f.get('tracking_number_bare', '') or ''
+        facility = 'Fort Wayne' if tn.startswith('260') else 'Waterloo'
+        form_data = f.get('form', {}) or {}
+        custom = form_data.get('custom', []) or []
+        how_help = ''
+        for c in custom:
+            if c.get('id') == 'how_can_we_help':
+                how_help = (c.get('value', '') or '').strip()
         forms_clean.append({
-            'dt': f.get('dt',''),
-            'n':  (f.get('n','') or '')[:40],
-            'e':  f.get('e','') or '',
-            'ph': f.get('ph','') or '',
-            'ci': f.get('ci','') or '',
-            'st': f.get('st','') or '',
-            'sr': f.get('sr','') or '',
-            'fa': fa,
-            'fn': f.get('fn','') or '',
-            'nw': bool(f.get('nw',False)),
-            'hw': f.get('hw','') or ''
+            'dt': f['called_at'][:16], 'n': (f.get('name','') or '')[:40],
+            'e': f.get('email','') or '', 'ph': f.get('caller_number_format','') or '',
+            'ci': f.get('city','') or '', 'st': f.get('state','') or '',
+            'sr': f.get('source','') or '', 'fa': facility,
+            'fn': form_data.get('form_name','') or '',
+            'nw': bool(f.get('is_new_caller', False)), 'hw': how_help
         })
+    return forms_clean
 
-    # ── Assemble output ──────────────────────────────────────────────────
+def build_extra(calls):
+    agent_daily = defaultdict(lambda: defaultdict(lambda: {'total':0,'inbound':0,'outbound':0,'answered':0,'missed':0,'dur':0,'dur_n':0}))
+    returning_daily = Counter()
+    nc_daily_detail = defaultdict(lambda: {'dow':Counter(),'hour':Counter(),'src':Counter()})
+    for c in calls:
+        ag = (c.get('agent') or {}).get('name','')
+        d  = c['called_at'][:10]
+        if ag:
+            s = agent_daily[ag][d]
+            s['total'] += 1
+            if c['direction']=='inbound':  s['inbound']  += 1
+            if c['direction']=='outbound': s['outbound'] += 1
+            status = c.get('dial_status','')
+            dur = c.get('duration',0) or 0
+            if status in ('answered','completed'):   s['answered'] += 1; s['dur'] += dur; s['dur_n'] += 1
+            elif status in ('no-answer','busy','no answer'): s['missed'] += 1
+        if c['direction']=='inbound' and not c.get('is_new_caller'):
+            returning_daily[d] += 1
+        if c.get('is_new_caller') and c['direction']=='inbound':
+            dd = nc_daily_detail[d]
+            dd['dow'][c.get('day','')] += 1
+            dd['hour'][c.get('hour','')] += 1
+            dd['src'][c.get('source','Unknown')] += 1
     return {
-        'daily_full': {k: dict(v) for k,v in daily.items()},
-        'split': {
-            'daily_all': {k: dict(v) for k,v in daily_all.items()},
-            'daily_fw':  {k: dict(v) for k,v in daily_fw.items()},
-            'daily_wl':  {k: dict(v) for k,v in daily_wl.items()},
-            'dow_all': dict(dow_all), 'dow_fw': dict(dow_fw), 'dow_wl': dict(dow_wl),
-            'hm_all': dict(hm_all),   'hm_fw':  dict(hm_fw),  'hm_wl':  dict(hm_wl),
-            'src_all': dict(src_all), 'src_fw': dict(src_fw),  'src_wl': dict(src_wl),
-            'nc_dow_all': dict(nc_dow_all), 'nc_dow_fw': dict(nc_dow_fw), 'nc_dow_wl': dict(nc_dow_wl),
-            'nc_hr_all':  dict(nc_hr_all),  'nc_hr_fw':  dict(nc_hr_fw),  'nc_hr_wl':  dict(nc_hr_wl),
-            'missed_all': missed_log,
-            'agents': {k: dict(v) for k,v in agent_stats.items()}
-        },
-        'marketing': {
-            'disposition':  dict(disposition),
-            'disp_by_fac':  {k: dict(v) for k,v in disp_by_fac.items()},
-            'sale_daily':   {k: dict(v) for k,v in sale_daily.items()},
-            'pages':        dict(pages.most_common(12)),
-            'refs':         dict(refs.most_common(10)),
-            'notes':        notes
-        },
-        'recordings': recordings,
-        'call_log':   call_log,
-        'forms':      forms_clean
+        'agent_daily': {ag: {d: dict(v) for d,v in days.items()} for ag,days in agent_daily.items()},
+        'returning_daily': dict(returning_daily),
+        'nc_daily_detail': {d: {'dow':dict(v['dow']),'hour':dict(v['hour']),'src':dict(v['src'])} for d,v in nc_daily_detail.items()}
     }
 
+def build_hm_daily(calls):
+    hm_daily = defaultdict(lambda: defaultdict(int))
+    for c in calls:
+        if c['direction'] != 'inbound': continue
+        d   = c['called_at'][:10]
+        fac = 'fw' if (c.get('tracking_number_bare','') or '').startswith('260') else 'wl'
+        day = c.get('day',''); hr = c.get('hour','')
+        if day and hr:
+            hm_daily[d][f'{day}|{hr}'] += 1
+            hm_daily[d][f'_fac_{fac}_{day}|{hr}'] += 1
+    return {d: dict(v) for d,v in hm_daily.items()}
+
+# ── Main ─────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    print("Loading raw data...")
-    with open('ctm_calls_raw.json') as f:     calls = json.load(f)
-    with open('ctm_forms_all_final.json') as f: forms_raw = json.load(f)
+    print("1. Pulling calls...")
+    calls = pull_calls()
+    print("2. Pulling forms...")
+    forms_raw = pull_forms()
+    print("3. Processing...")
+    result  = process_all(calls, forms_raw)
+    extra   = build_extra(calls)
+    hm_d    = build_hm_daily(calls)
+    forms_c = process_forms_raw(forms_raw)
 
-    print(f"Processing {len(calls)} calls + {len(forms_raw)} forms...")
-    result = process_all(calls, forms_raw)
+    sep = (',', ':')
+    files = {
+        'data_split.json':      result['split'],
+        'data_daily_full.json': result['daily_full'],
+        'data_marketing.json':  result['marketing'],
+        'data_recordings.json': result['recordings'],
+        'data_log.json':        result['call_log'],
+        'data_forms.json':      forms_c,
+        'data_extra.json':      extra,
+        'data_hm_daily.json':   hm_d,
+    }
+    for fname, data in files.items():
+        with open(fname, 'w') as f:
+            json.dump(data, f, separators=sep)
+        print(f"  {fname}: {os.path.getsize(fname)//1024} KB")
 
-    # Save individual files
-    sep = (',',':')
-    with open('data_daily_full.json','w') as f: json.dump(result['daily_full'],  f, separators=sep)
-    with open('data_split.json','w')      as f: json.dump(result['split'],       f, separators=sep)
-    with open('data_marketing.json','w')  as f: json.dump(result['marketing'],   f, separators=sep)
-    with open('data_recordings.json','w') as f: json.dump(result['recordings'],  f, separators=sep)
-    with open('data_log.json','w')        as f: json.dump(result['call_log'],    f, separators=sep)
-    with open('data_forms.json','w')      as f: json.dump(result['forms'],       f, separators=sep)
-
-    for fname in ['data_daily_full.json','data_split.json','data_marketing.json',
-                  'data_recordings.json','data_log.json','data_forms.json']:
-        import os
-        sz = os.path.getsize(fname)
-        print(f"  {fname}: {sz//1024} KB")
-
-    print("Done.")
+    print(f"Done. Period: {START_DATE} → {END_DATE}")

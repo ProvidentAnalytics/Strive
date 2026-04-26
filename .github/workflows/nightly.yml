@@ -2,15 +2,10 @@ name: Dashboard Refresh
 
 on:
   schedule:
-    # Central Time = UTC-5 (standard) / UTC-6 (daylight saving)
-    # Currently CDT (UTC-5), so:
-    # 11:00 AM CDT = 16:00 UTC
-    #  3:00 PM CDT = 20:00 UTC
-    #  7:00 PM CDT = 00:00 UTC (next day)
-    - cron: '0 16 * * *'   # 11:00 AM Central
-    - cron: '0 20 * * *'   #  3:00 PM Central
-    - cron: '0 0  * * *'   #  7:00 PM Central
-  workflow_dispatch:         # Manual trigger from GitHub Actions tab
+    - cron: '0 6 * * *'    # 6AM UTC = midnight-1AM Central
+    - cron: '0 16 * * *'   # 4PM UTC = 11AM Central
+    - cron: '0 21 * * *'   # 9PM UTC = 3PM Central
+  workflow_dispatch:
 
 jobs:
   refresh:
@@ -24,11 +19,58 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: pip install PyNaCl
-
-      - name: Run dashboard builder
+      - name: Pull fresh data from CTM
         env:
           CTM_AUTH: ${{ secrets.CTM_AUTH }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: python build_dashboard.py
+        run: python process_data.py
+
+      - name: Build dashboard HTML
+        run: python build_clean.py
+
+      - name: Push updated dashboard to GitHub
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          python - <<'EOF'
+          import urllib.request, json, base64, os
+
+          TOKEN = os.environ['GH_TOKEN']
+          OWNER = 'ProvidentAnalytics'
+          REPO  = 'Strive'
+          headers = {
+              'Authorization': f'token {TOKEN}',
+              'Accept': 'application/vnd.github.v3+json',
+              'User-Agent': 'StriveAnalytics/2.0',
+              'Content-Type': 'application/json'
+          }
+
+          def api(method, path, payload=None):
+              url = f'https://api.github.com/repos/{OWNER}/{REPO}{path}'
+              data = json.dumps(payload).encode() if payload else None
+              req = urllib.request.Request(url, data=data, method=method, headers=headers)
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  return json.loads(r.read())
+
+          from datetime import datetime, timezone
+          now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+
+          ref       = api('GET', '/git/refs/heads/main')
+          latest    = ref['object']['sha']
+          base_tree = api('GET', f'/git/commits/{latest}')['tree']['sha']
+
+          with open('strive_ctm_clean.html') as f:
+              dashboard = f.read()
+
+          new_tree = api('POST', '/git/trees', {
+              'base_tree': base_tree,
+              'tree': [{'path': 'ctm-calls/index.html', 'mode': '100644', 'type': 'blob', 'content': dashboard}]
+          })
+          new_commit = api('POST', '/git/commits', {
+              'message': f'Auto-refresh: {now}',
+              'tree': new_tree['sha'],
+              'parents': [latest]
+          })
+          api('PATCH', '/git/refs/heads/main', {'sha': new_commit['sha']})
+          print(f'Dashboard updated: {now}')
+          EOF
