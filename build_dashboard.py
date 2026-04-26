@@ -407,7 +407,7 @@ def main():
     # 5. Push to GitHub
     print("6. Pushing to GitHub...")
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M UTC')
-    github_push('index.html', html.encode(), f'Auto-refresh: {now_str}')
+    github_push('ctm-calls/index.html', html.encode(), f'Auto-refresh CTM: {now_str}')
 
     print(f"\n✓ Done! Dashboard updated at https://providentanalytics.github.io/Strive")
     print(f"{'='*60}\n")
