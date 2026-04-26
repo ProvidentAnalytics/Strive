@@ -17,6 +17,8 @@ def build():
     LOG   = load('data_log.json')
     FORMS = load('data_forms.json')
     MKT   = load('data_marketing.json')
+    EXTRA = load('data_extra.json')
+    HMD   = load('data_hm_daily.json')
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -204,6 +206,16 @@ body{{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;mi
 .ret-pill{{background:rgba(107,126,150,.1);color:var(--muted);font-size:10px;font-family:'Space Mono',monospace;font-weight:700;padding:2px 7px;border-radius:4px}}
 .t-badge{{font-family:'Space Mono',monospace;font-size:9px;background:rgba(59,130,246,.1);color:var(--blue);padding:1px 5px;border-radius:3px}}
 
+/* ── EXPANDABLE NOTES ── */
+.note-row td {{ cursor:pointer; }}
+.note-row:hover td {{ background:rgba(244,246,249,.9)!important; }}
+.note-cell {{ white-space:normal!important; line-height:1.6; max-width:500px; }}
+.note-preview {{ display:block; }}
+.note-full {{ display:none; margin-top:6px; padding-top:6px; border-top:1px solid var(--border); color:#374151; }}
+.note-row.expanded .note-preview {{ font-weight:600; }}
+.note-row.expanded .note-full {{ display:block; }}
+.note-expand-icon {{ float:right; font-size:10px; color:var(--muted); font-family:'Space Mono',monospace; margin-left:8px; }}
+
 /* ── PAGER ── */
 .pager{{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;font-family:'Space Mono',monospace;font-size:11px}}
 .pager-btn{{padding:5px 14px;border:1px solid var(--border);border-radius:6px;background:var(--white);cursor:pointer;color:var(--navy);font-weight:700;font-family:'Space Mono',monospace;font-size:11px}}
@@ -249,7 +261,7 @@ body{{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;mi
   <button class="tnav" onclick="showTab('facility',this)">Facility Split</button>
   <button class="tnav" onclick="showTab('newcallers',this)">New Callers / Leads</button>
   <button class="tnav" onclick="showTab('recordings',this)">Recordings &amp; Transcripts</button>
-  <button class="tnav" onclick="showTab('calllog',this)">Live Call Log<span class="tab-badge">1,774</span></button>
+  <button class="tnav" onclick="showTab('calllog',this)">Call Log<span class="tab-badge">1,774</span></button>
   <button class="tnav" onclick="showTab('forms',this)">Contact Forms<span class="tab-badge">152</span></button>
   <button class="tnav" onclick="showTab('marketing',this)">Marketing &amp; Trends</button>
 </div>
@@ -437,6 +449,8 @@ const RECS  = {RECS};
 const LOG   = {LOG};
 const FORMS = {FORMS};
 const MKT   = {MKT};
+const EXTRA = {EXTRA};
+const HMD   = {HMD};
 
 // ═══════════════════════════════════════════════════════
 // CONSTANTS
@@ -671,6 +685,9 @@ function buildOverview() {{
   const dates   = getPeriodDates();
   const buckets = aggregateDates(dates);
   const labels  = buckets.map(b => b.label);
+  // FIX 1: Dynamic chip
+  const _chip = document.getElementById('ov-period-chip');
+  if(_chip) _chip.textContent = PERIOD==='7d'?'7 DAYS':PERIOD==='all'?'ALL DATA':'30 DAYS';
 
   const total  = dates.reduce((s,d) => s + (agg([d],'total')),   0);
   const ib     = dates.reduce((s,d) => s + (agg([d],'inbound')), 0);
@@ -688,10 +705,12 @@ function buildOverview() {{
 
   // Daily volume — scrollable
   document.getElementById('ov-daily-wrap').innerHTML = scrollWrap('ov-daily', 220, buckets.length);
+  const ibData  = buckets.map(b=>agg(b.dates,'inbound'));
   mkChart('ov-daily', {{type:'bar', data:{{labels, datasets:[
-    {{label:'Inbound',  data:buckets.map(b=>agg(b.dates,'inbound')),  backgroundColor:'rgba(10,61,92,.75)',   borderRadius:3, borderSkipped:false}},
-    {{label:'Outbound', data:buckets.map(b=>agg(b.dates,'outbound')), backgroundColor:'rgba(61,255,192,.45)', borderRadius:3, borderSkipped:false}},
-    {{label:'Missed', type:'line', data:buckets.map(b=>agg(b.dates,'missed')), borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.08)', borderWidth:2, pointRadius:2, tension:.3, fill:false, yAxisID:'y2'}}
+    {{label:'Inbound',  data:ibData,                                         backgroundColor:'rgba(10,61,92,.75)',   borderRadius:3, borderSkipped:false}},
+    {{label:'Outbound', data:buckets.map(b=>agg(b.dates,'outbound')),        backgroundColor:'rgba(61,255,192,.45)', borderRadius:3, borderSkipped:false}},
+    {{label:'Missed', type:'line', data:buckets.map(b=>agg(b.dates,'missed')), borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.08)', borderWidth:2, pointRadius:2, tension:.3, fill:false, yAxisID:'y2'}},
+    {{label:'Trend',  type:'line', data:trendLine(ibData),                   borderColor:'rgba(10,61,92,.5)', borderWidth:1.5, pointRadius:0, tension:.4, fill:false, borderDash:[4,3], yAxisID:'y'}}
   ]}}, options:{{responsive:true, maintainAspectRatio:false,
     plugins:{{legend:{{position:'bottom', labels:{{font:{{size:11}}, boxWidth:10, padding:10}}}}}},
     scales:{{
@@ -704,7 +723,8 @@ function buildOverview() {{
   // New callers vs missed — scrollable
   document.getElementById('ov-newmiss-wrap').innerHTML = scrollWrap('ov-newmiss', 200, buckets.length);
   mkChart('ov-newmiss', {{type:'line', data:{{labels, datasets:[
-    {{label:'New Callers', data:buckets.map(b=>agg(b.dates,'new')),    borderColor:'#0a3d5c', backgroundColor:'rgba(10,61,92,.07)',   borderWidth:2, pointRadius:2.5, tension:.3, fill:true}},
+    {{label:'New Callers',      data:buckets.map(b=>agg(b.dates,'new')),                           borderColor:'#0a3d5c', backgroundColor:'rgba(10,61,92,.07)',   borderWidth:2, pointRadius:2.5, tension:.3, fill:true}},
+    {{label:'Returning Callers', data:buckets.map(b=>b.dates.reduce((s,d)=>s+(EXTRA.returning_daily[d]||0),0)), borderColor:'#10b981', backgroundColor:'rgba(16,185,129,.06)', borderWidth:2, pointRadius:2.5, tension:.3, fill:true}},    borderColor:'#0a3d5c', backgroundColor:'rgba(10,61,92,.07)',   borderWidth:2, pointRadius:2.5, tension:.3, fill:true}},
     {{label:'Missed',      data:buckets.map(b=>agg(b.dates,'missed')), borderColor:'#ef4444', backgroundColor:'rgba(239,68,68,.05)', borderWidth:2, pointRadius:2.5, tension:.3, fill:true}}
   ]}}, options:{{responsive:true, maintainAspectRatio:false,
     plugins:{{legend:{{position:'bottom', labels:{{font:{{size:11}}, boxWidth:10, padding:10}}}}}},
@@ -730,12 +750,35 @@ function buildOverview() {{
 }}
 
 // ═══════════════════════════════════════════════════════
-// AGENTS
+// AGENTS — FIX 3: time-sensitive using per-day agent data
 // ═══════════════════════════════════════════════════════
 function buildAgents() {{
-  const agents = Object.entries(SD.agents).map(([name,s]) => {{
-    const facTotal = FAC==='fw'?s.fw : FAC==='wl'?s.wl : s.total;
-    return {{name, ...s, facTotal}};
+  const dates = getPeriodDates();
+
+  // Aggregate agent stats for the selected period only
+  const agMap = {{}};
+  dates.forEach(d => {{
+    Object.entries(EXTRA.agent_daily).forEach(([ag, days]) => {{
+      const row = days[d];
+      if (!row) return;
+      if (!agMap[ag]) agMap[ag] = {{name:ag,total:0,inbound:0,outbound:0,answered:0,missed:0,dur:0,dur_n:0,fw:0,wl:0}};
+      const s = agMap[ag];
+      s.total    += row.total;
+      s.inbound  += row.inbound;
+      s.outbound += row.outbound;
+      s.answered += row.answered;
+      s.missed   += row.missed;
+      s.dur      += row.dur;
+      s.dur_n    += row.dur_n;
+    }});
+  }});
+
+  // Apply facility filter using full SD.agents fw/wl ratio
+  const agents = Object.values(agMap).map(s => {{
+    const full = SD.agents[s.name] || {{}};
+    const ratio = FAC==='fw'?(full.fw||0)/Math.max(full.total||1,1):
+                  FAC==='wl'?(full.wl||0)/Math.max(full.total||1,1):1;
+    return {{...s, facTotal: Math.round(s.total * ratio)}};
   }}).filter(a => a.facTotal > 0).sort((a,b) => b.facTotal - a.facTotal);
 
   const maxT  = Math.max(...agents.map(a=>a.facTotal), 1);
@@ -768,15 +811,19 @@ function buildAgents() {{
 
   const names = agents.map(a => a.name.split(' ')[0]);
   mkChart('agt-bar', {{type:'bar', data:{{labels:names, datasets:[{{label:'Total', data:agents.map(a=>a.facTotal), backgroundColor:'rgba(10,61,92,.75)', borderRadius:6, borderSkipped:false}}]}},
-    options:{{responsive:true, maintainAspectRatio:false, plugins:{{legend:{{display:false}}}}, scales:{{x:{{grid:{{display:false}}, ticks:{{font:{{size:11}}}}}}, y:{{grid:{{color:'rgba(225,231,239,.6)'}}, ticks:{{font:{{family:'Space Mono',size:9}}}}}}}}}}
+    options:{{responsive:true, maintainAspectRatio:false,
+      plugins:{{legend:{{display:false}}, datalabels:false}},
+      scales:{{x:{{grid:{{display:false}}, ticks:{{font:{{size:11}}}}}}, y:{{grid:{{color:'rgba(225,231,239,.6)'}}, ticks:{{font:{{family:'Space Mono',size:9}}}}}}}}
+    }}
   }});
   mkChart('agt-mix', {{type:'bar', data:{{labels:names, datasets:[
     {{label:'Inbound',  data:agents.map(a=>a.inbound),  backgroundColor:'rgba(10,61,92,.7)',   borderRadius:4, borderSkipped:false}},
     {{label:'Outbound', data:agents.map(a=>a.outbound), backgroundColor:'rgba(61,255,192,.6)', borderRadius:4, borderSkipped:false}}
-  ]}}, options:{{responsive:true, maintainAspectRatio:false, plugins:{{legend:{{position:'bottom', labels:{{font:{{size:11}},boxWidth:10,padding:10}}}}}}, scales:{{x:{{stacked:true,grid:{{display:false}},ticks:{{font:{{size:11}}}}}}, y:{{stacked:true, grid:{{color:'rgba(225,231,239,.6)'}}, ticks:{{font:{{family:'Space Mono',size:9}}}}}}}}}}
-  }});
+  ]}}, options:{{responsive:true, maintainAspectRatio:false,
+    plugins:{{legend:{{position:'bottom', labels:{{font:{{size:11}},boxWidth:10,padding:10}}}}}},
+    scales:{{x:{{stacked:true,grid:{{display:false}},ticks:{{font:{{size:11}}}}}}, y:{{stacked:true, grid:{{color:'rgba(225,231,239,.6)'}}, ticks:{{font:{{family:'Space Mono',size:9}}}}}}}}
+  }}}});
 }}
-
 // ═══════════════════════════════════════════════════════
 // SOURCES
 // ═══════════════════════════════════════════════════════
@@ -872,22 +919,40 @@ function buildSources() {{
 }}
 
 // ═══════════════════════════════════════════════════════
-// HEATMAP
+// HEATMAP — FIX 6: recomputed from HMD for selected period
 // ═══════════════════════════════════════════════════════
 function buildHeatmap() {{
-  const hm = FAC==='fw'?SD.hm_fw:FAC==='wl'?SD.hm_wl:SD.hm_all;
-  const maxV = Math.max(...Object.values(hm).filter(v=>v>0), 1);
+  // Recompute heatmap from per-day data for selected period + facility
+  const dates = getPeriodDates();
+  const hm = {{}};
+  dates.forEach(d => {{
+    const dayData = HMD[d] || {{}};
+    Object.entries(dayData).forEach(([key, val]) => {{
+      if (key.startsWith('_fac_')) {{
+        // Facility-tagged key: _fac_fw_Monday|10AM
+        const isFw = key.startsWith('_fac_fw_');
+        const isWl = key.startsWith('_fac_wl_');
+        if (FAC==='fw' && !isFw) return;
+        if (FAC==='wl' && !isWl) return;
+        const realKey = key.replace('_fac_fw_','').replace('_fac_wl_','');
+        hm[realKey] = (hm[realKey]||0) + val;
+      }} else if (FAC === 'all') {{
+        hm[key] = (hm[key]||0) + val;
+      }}
+    }});
+  }});
 
+  const maxV = Math.max(...Object.values(hm).filter(v=>v>0), 1);
   const hourTotals = {{}};
-  HOURS_ORD.forEach(h => {{ hourTotals[h] = DAYS_ORD.reduce((s,d) => s+(hm[`${{d}}|${{h}}`]||0), 0); }});
+  HOURS_ORD.forEach(h => {{ hourTotals[h] = DAYS_ORD.reduce((s,d)=>s+(hm[`${{d}}|${{h}}`]||0),0); }});
   const dowTotals = {{}};
-  DAYS_ORD.forEach(d => {{ dowTotals[d] = HOURS_ORD.reduce((s,h) => s+(hm[`${{d}}|${{h}}`]||0), 0); }});
+  DAYS_ORD.forEach(d => {{ dowTotals[d] = HOURS_ORD.reduce((s,h)=>s+(hm[`${{d}}|${{h}}`]||0),0); }});
   let hotV=0, hotC='';
-  Object.entries(hm).forEach(([k,v]) => {{ if(v>hotV){{hotV=v; hotC=k.replace('|',' ');}} }});
-  const peakHour = HOURS_ORD.reduce((a,b) => hourTotals[a]>hourTotals[b]?a:b);
-  const peakDay  = DAYS_ORD.reduce((a,b) => dowTotals[a]>dowTotals[b]?a:b);
-  const dow      = FAC==='fw'?SD.dow_fw:FAC==='wl'?SD.dow_wl:SD.dow_all;
-  const wkend    = (dow['Saturday']||0)+(dow['Sunday']||0);
+  Object.entries(hm).forEach(([k,v]) => {{ if(v>hotV && !k.startsWith('_')){{hotV=v; hotC=k.replace('|',' ');}} }});
+  const peakHour = HOURS_ORD.reduce((a,b) => hourTotals[a]>=hourTotals[b]?a:b);
+  const peakDay  = DAYS_ORD.reduce((a,b) => dowTotals[a]>=dowTotals[b]?a:b);
+  const dow = FAC==='fw'?SD.dow_fw:FAC==='wl'?SD.dow_wl:SD.dow_all;
+  const wkend = (dow['Saturday']||0)+(dow['Sunday']||0);
 
   document.getElementById('hm-kpis').innerHTML =
     kpiHTML('Peak Hour',      peakHour,                                              'Highest call density', 'kpi navy') +
@@ -895,7 +960,7 @@ function buildHeatmap() {{
     kpiHTML('Hottest Cell',   `<span style="font-size:18px">${{hotC}}</span>`,       `${{hotV}} calls`,      'kpi blue') +
     kpiHTML('Weekend Volume', wkend.toLocaleString(),                                'Sat + Sun',            'kpi amber');
 
-  // Build heatmap grid — red color scheme (FIX 8)
+  // Build heatmap grid — red color scheme
   let html = '<div class="hm-grid"><div class="hm-hrow"><div></div>';
   DAYS_ORD.forEach(d => {{ html += `<div class="hm-dlbl">${{d.slice(0,3)}}</div>`; }});
   html += '</div>';
@@ -915,9 +980,10 @@ function buildHeatmap() {{
   document.getElementById('hm-container').innerHTML = html;
 
   // Hourly bar
+  const maxHr = Math.max(...Object.values(hourTotals), 1);
   mkChart('hm-hourly', {{type:'bar', data:{{labels:HOURS_ORD, datasets:[{{label:'Calls',
     data:HOURS_ORD.map(h=>hourTotals[h]),
-    backgroundColor:HOURS_ORD.map(h=>{{const hp=hourTotals[h]/Math.max(...Object.values(hourTotals),1);return hp>0.8?'rgba(239,68,68,0.85)':hp>0.5?'rgba(239,68,68,0.55)':'rgba(239,68,68,0.25)'}}),
+    backgroundColor:HOURS_ORD.map(h=>{{const hp=hourTotals[h]/maxHr;return hp>0.8?'rgba(239,68,68,0.85)':hp>0.5?'rgba(239,68,68,0.55)':'rgba(239,68,68,0.25)'}}),
     borderRadius:5, borderSkipped:false
   }}]}}, options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{x:{{grid:{{display:false}},ticks:{{font:{{family:'Space Mono',size:9}},maxRotation:45}}}},y:{{grid:{{color:'rgba(225,231,239,.6)'}},ticks:{{font:{{family:'Space Mono',size:9}}}}}}}}}}
   }});
@@ -928,7 +994,6 @@ function buildHeatmap() {{
     options:{{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{{legend:{{position:'bottom',labels:{{font:{{size:11}},boxWidth:10,padding:10}}}}}}}}
   }});
 }}
-
 // ═══════════════════════════════════════════════════════
 // MISSED
 // ═══════════════════════════════════════════════════════
@@ -978,16 +1043,30 @@ function buildFacility() {{
 }}
 
 // ═══════════════════════════════════════════════════════
-// NEW CALLERS
+// NEW CALLERS — FIX 8: DOW/Hour/Source now time-sensitive
 // ═══════════════════════════════════════════════════════
 function buildNewCallers() {{
   const dates   = getPeriodDates();
   const buckets = aggregateDates(dates);
   const total   = dates.reduce((s,d)=>s+agg([d],'new'),0);
   const ib      = dates.reduce((s,d)=>s+agg([d],'inbound'),0);
-  const ncDow   = FAC==='fw'?SD.nc_dow_fw:FAC==='wl'?SD.nc_dow_wl:SD.nc_dow_all;
-  const ncHr    = FAC==='fw'?SD.nc_hr_fw:FAC==='wl'?SD.nc_hr_wl:SD.nc_hr_all;
-  const peakDay = DAYS_ORD.reduce((a,b)=>(ncDow[a]||0)>(ncDow[b]||0)?a:b);
+
+  // Recompute DOW, Hour, Source from EXTRA.nc_daily_detail for selected period
+  const ncDow = {{}}, ncHr = {{}}, ncSrc = {{}};
+  dates.forEach(d => {{
+    const detail = EXTRA.nc_daily_detail[d];
+    if (!detail) return;
+    // Apply facility filter using inbound ratio
+    const row = DAILY[d] || {{}};
+    const totalIb = row.inbound || 1;
+    const facIb   = FAC==='fw'?(row.fw_inbound||0):FAC==='wl'?(row.wl_inbound||0):totalIb;
+    const ratio   = FAC==='all'?1:(totalIb>0?facIb/totalIb:0);
+    Object.entries(detail.dow||{{}}).forEach(([k,v]) => {{ ncDow[k] = (ncDow[k]||0) + Math.round(v*ratio); }});
+    Object.entries(detail.hour||{{}}).forEach(([k,v])=> {{ ncHr[k]  = (ncHr[k]||0)  + Math.round(v*ratio); }});
+    Object.entries(detail.src||{{}}).forEach(([k,v]) => {{ ncSrc[k] = (ncSrc[k]||0) + Math.round(v*ratio); }});
+  }});
+
+  const peakDay = DAYS_ORD.reduce((a,b)=>(ncDow[a]||0)>=(ncDow[b]||0)?a:b);
 
   document.getElementById('nc-kpis').innerHTML =
     kpiHTML('New Callers',     total.toLocaleString(),                                  facLabel(),        'kpi green') +
@@ -995,33 +1074,42 @@ function buildNewCallers() {{
     kpiHTML('New Caller Rate', ib>0?(total/ib*100).toFixed(1)+'%':'0%',                'Of inbound',      'kpi teal') +
     kpiHTML('Peak Day',        `<span style="font-size:20px">${{peakDay}}</span>`,      `${{ncDow[peakDay]||0}} new callers`, 'kpi blue');
 
+  // Daily trend — scrollable with trend line (FIX 7)
   document.getElementById('nc-daily-wrap').innerHTML = scrollWrap('nc-daily', 200, buckets.length);
-  mkChart('nc-daily', {{type:'line', data:{{labels:buckets.map(b=>b.label), datasets:[{{label:'New Callers',
-    data:buckets.map(b=>agg(b.dates,'new')),
-    borderColor:'#10b981',backgroundColor:'rgba(16,185,129,.08)',borderWidth:2.5,pointRadius:3,tension:.3,fill:true
-  }}]}}, options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{x:{{grid:{{display:false}},ticks:{{font:{{family:'Space Mono',size:8}},maxRotation:45}}}},y:{{grid:{{color:'rgba(225,231,239,.6)'}},ticks:{{font:{{family:'Space Mono',size:9}}}},beginAtZero:true}}}}}}
-  }});
+  const ncDailyData = buckets.map(b=>agg(b.dates,'new'));
+  mkChart('nc-daily', {{type:'bar', data:{{labels:buckets.map(b=>b.label), datasets:[
+    {{label:'New Callers', data:ncDailyData, backgroundColor:'rgba(16,185,129,.6)', borderRadius:4, borderSkipped:false}},
+    {{label:'Trend', type:'line', data:trendLine(ncDailyData), borderColor:'#0a3d5c', borderWidth:2, pointRadius:0, tension:.4, fill:false, borderDash:[5,3]}}
+  ]}}, options:{{responsive:true,maintainAspectRatio:false,
+    plugins:{{legend:{{position:'bottom',labels:{{font:{{size:11}},boxWidth:10,padding:10}}}}}},
+    scales:{{x:{{grid:{{display:false}},ticks:{{font:{{family:'Space Mono',size:8}},maxRotation:45}}}},y:{{grid:{{color:'rgba(225,231,239,.6)'}},ticks:{{font:{{family:'Space Mono',size:9}}}},beginAtZero:true}}}}
+  }}}});
+
+  // DOW bar — period-filtered
   mkChart('nc-dow', {{type:'bar', data:{{labels:DAYS_ORD.map(d=>d.slice(0,3)), datasets:[{{label:'New Callers',
     data:DAYS_ORD.map(d=>ncDow[d]||0),
     backgroundColor:DAYS_ORD.map((_,i)=>i<5?'rgba(10,61,92,.75)':'rgba(61,255,192,.6)'),borderRadius:5,borderSkipped:false
   }}]}}, options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{x:{{grid:{{display:false}},ticks:{{font:{{size:11}}}}}},y:{{grid:{{color:'rgba(225,231,239,.6)'}},ticks:{{font:{{family:'Space Mono',size:9}}}},beginAtZero:true}}}}}}
   }});
+
+  // Hour bar — period-filtered
   const hrs = HOURS_ORD.filter(h=>ncHr[h]);
-  const maxHr = Math.max(...hrs.map(h=>ncHr[h]),1);
+  const maxHr = Math.max(...hrs.map(h=>ncHr[h]), 1);
   mkChart('nc-hour', {{type:'bar', data:{{labels:hrs, datasets:[{{label:'New Callers',
     data:hrs.map(h=>ncHr[h]||0),
     backgroundColor:hrs.map(h=>{{const p=ncHr[h]/maxHr;return p>0.8?'#0a3d5c':p>0.5?'#3b82f6':'rgba(61,255,192,.7)'}}),
     borderRadius:5,borderSkipped:false
   }}]}}, options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{x:{{grid:{{display:false}},ticks:{{font:{{family:'Space Mono',size:9}},maxRotation:45}}}},y:{{grid:{{color:'rgba(225,231,239,.6)'}},ticks:{{font:{{family:'Space Mono',size:9}}}},beginAtZero:true}}}}}}
   }});
-  const srcTots = getSrcTotals(dates);
+
+  // Source donut — period-filtered
+  const srcEntries = Object.entries(ncSrc).sort((a,b)=>b[1]-a[1]);
   mkChart('nc-source', {{type:'doughnut', data:{{
-    labels:srcTots.map(([k])=>shortSrc(k)),
-    datasets:[{{data:srcTots.map(([,v])=>v),backgroundColor:srcTots.map(([k])=>SRC_COLORS[k]||'#8b5cf6'),borderWidth:3,borderColor:'#fff'}}]
+    labels:srcEntries.map(([k])=>shortSrc(k)),
+    datasets:[{{data:srcEntries.map(([,v])=>v),backgroundColor:srcEntries.map(([k])=>SRC_COLORS[k]||'#8b5cf6'),borderWidth:3,borderColor:'#fff'}}]
   }}, options:{{responsive:true,maintainAspectRatio:false,cutout:'60%',plugins:{{legend:{{position:'bottom',labels:{{font:{{size:11}},boxWidth:10,padding:10}}}}}}}}
   }});
 }}
-
 // ═══════════════════════════════════════════════════════
 // RECORDINGS
 // ═══════════════════════════════════════════════════════
@@ -1132,9 +1220,15 @@ function renderLog(page) {{
 // FORMS
 // ═══════════════════════════════════════════════════════
 function buildFormCharts() {{
-  const fms = FAC==='all'?FORMS:FORMS.filter(f=>f.fa===(FAC==='fw'?'Fort Wayne':'Waterloo'));
-  const fw  = FORMS.filter(f=>f.fa==='Fort Wayne').length;
-  const wl  = FORMS.filter(f=>f.fa==='Waterloo').length;
+  // FIX 10: Period + facility sensitive
+  const formPeriodDates = new Set(getPeriodDates());
+  const fms = FORMS.filter(f => {{
+    if (FAC !== 'all' && f.fa !== (FAC==='fw'?'Fort Wayne':'Waterloo')) return false;
+    if (PERIOD !== 'all' && !formPeriodDates.has(f.dt.slice(0,10))) return false;
+    return true;
+  }});
+  const fw  = fms.filter(f=>f.fa==='Fort Wayne').length;
+  const wl  = fms.filter(f=>f.fa==='Waterloo').length;
   const nw  = fms.filter(f=>f.nw).length;
   document.getElementById('fm-kpis').innerHTML =
     kpiHTML('Total Form Leads', fms.length,            'All time',               'kpi navy') +
@@ -1159,8 +1253,19 @@ function buildFormCharts() {{
 
 function renderForms() {{
   const q  = (document.getElementById('form-search')?.value||'').toLowerCase();
-  const fm = (FAC==='all'?FORMS:FORMS.filter(f=>f.fa===(FAC==='fw'?'Fort Wayne':'Waterloo')))
-    .filter(f => !q||((f.n+f.e+f.ph+f.hw+f.ci).toLowerCase().includes(q)));
+  // FIX 10: Filter by period + facility
+  const formDates = new Set(getPeriodDates());
+  const fm = FORMS
+    .filter(f => {{
+      if (FAC !== 'all' && f.fa !== (FAC==='fw'?'Fort Wayne':'Waterloo')) return false;
+      // Period filter: form date must be within selected period
+      const fDate = f.dt.slice(0,10);
+      if (PERIOD !== 'all' && !formDates.has(fDate)) return false;
+      if (q && !((f.n+f.e+f.ph+f.hw+f.ci).toLowerCase().includes(q))) return false;
+      return true;
+    }});
+  // FIX 10: Sort most-recent-first
+  fm.sort((a,b) => b.dt.localeCompare(a.dt));
   document.getElementById('fm-chip').textContent = fm.length+' RESULTS';
   document.getElementById('forms-tbody').innerHTML = fm.map(f => `<tr>
     <td style="font-family:'Space Mono',monospace;font-size:10px;color:#6b7e96;white-space:nowrap">${{f.dt}}</td>
@@ -1259,12 +1364,74 @@ function renderNotes() {{
     return facOk && (!q||(n.n+n.ag).toLowerCase().includes(q));
   }});
   document.getElementById('notes-chip').textContent = ns.length+' NOTES';
-  document.getElementById('notes-tbody').innerHTML = ns.map(n => `<tr>
-    <td style="font-family:'Space Mono',monospace;font-size:10px;color:#6b7e96;white-space:nowrap">${{n.dt}}</td>
-    <td style="font-size:11px;font-weight:600;color:#0a3d5c;white-space:nowrap">${{n.ag||'—'}}</td>
-    <td><span class="${{n.fa==='Fort Wayne'?'fac-fw':'fac-wl'}}">${{n.fa==='Fort Wayne'?'FW':'WL'}}</span></td>
-    <td style="font-size:12px;color:#374151;white-space:normal;line-height:1.5">${{n.n}}</td>
-  </tr>`).join('');
+  document.getElementById('notes-tbody').innerHTML = ns.map((n,i) => {{
+    const preview = n.n.length > 80 ? n.n.slice(0,80)+'…' : n.n;
+    const hasMore = n.n.length > 80;
+    return `<tr class="note-row" id="note-${{i}}" onclick="toggleNote(${{i}})">
+      <td style="font-family:'Space Mono',monospace;font-size:10px;color:#6b7e96;white-space:nowrap;vertical-align:top;padding-top:10px">${{n.dt}}</td>
+      <td style="font-size:11px;font-weight:600;color:#0a3d5c;white-space:nowrap;vertical-align:top;padding-top:10px">${{n.ag||'—'}}</td>
+      <td style="vertical-align:top;padding-top:10px"><span class="${{n.fa==='Fort Wayne'?'fac-fw':'fac-wl'}}">${{n.fa==='Fort Wayne'?'FW':'WL'}}</span></td>
+      <td class="note-cell">
+        <span class="note-preview">${{preview}}${{hasMore?'<span class=\"note-expand-icon\">▼ expand</span>':''}}</span>
+        ${{hasMore?`<span class="note-full">${{n.n}}</span>`:''}}
+      </td>
+    </tr>`;
+  }}).join('');
+}}
+
+// ═══════════════════════════════════════════════════════
+// HELPERS — FIX 4 + FIX 7
+// ═══════════════════════════════════════════════════════
+
+// Linear regression trend line
+function trendLine(data) {{
+  const n = data.length;
+  if (n < 2) return data;
+  let sumX=0, sumY=0, sumXY=0, sumX2=0;
+  data.forEach((y,x) => {{ sumX+=x; sumY+=y; sumXY+=x*y; sumX2+=x*x; }});
+  const slope = (n*sumXY - sumX*sumY) / (n*sumX2 - sumX*sumX);
+  const intercept = (sumY - slope*sumX) / n;
+  return data.map((_,x) => Math.max(0, Math.round((slope*x + intercept)*10)/10));
+}}
+
+// Bar value label plugin (FIX 4) — shows numbers on bars
+const barLabelPlugin = {{
+  id: 'barLabels',
+  afterDatasetsDraw(chart) {{
+    const ctx = chart.ctx;
+    chart.data.datasets.forEach((dataset, di) => {{
+      if (dataset.type === 'line') return;  // skip trend lines
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((bar, idx) => {{
+        const val = dataset.data[idx];
+        if (!val || val === 0) return;
+        const label = typeof val === 'number' ? (val >= 1000 ? (val/1000).toFixed(1)+'k' : val.toString()) : '';
+        if (!label) return;
+        ctx.save();
+        ctx.font = '700 9px Space Mono, monospace';
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const x = bar.x;
+        const y = bar.y + (bar.height || 0) / 2;
+        // Only show if bar is tall enough
+        if ((bar.height || 0) > 14) {{
+          ctx.fillText(label, x, y);
+        }}
+        ctx.restore();
+      }});
+    }});
+  }}
+}};
+Chart.register(barLabelPlugin);
+
+// ═══════════════════════════════════════════════════════
+// TOGGLE NOTE (FIX 11)
+// ═══════════════════════════════════════════════════════
+function toggleNote(i) {{
+  const row = document.getElementById('note-'+i);
+  if (row) row.classList.toggle('expanded');
 }}
 
 // ═══════════════════════════════════════════════════════
