@@ -253,7 +253,7 @@ var barValuePlugin = {
 };
 Chart.register(barValuePlugin);
 
-// FIX 3: Pie/donut label plugin — shows count on segments
+// FIX 3: Pie/donut label plugin — shows count only on segments
 var pieValuePlugin = {
   id: 'pieValues',
   afterDatasetsDraw: function(chart) {
@@ -264,13 +264,16 @@ var pieValuePlugin = {
     if (total === 0) return;
     chart.getDatasetMeta(0).data.forEach(function(arc, i) {
       var val = dataset.data[i];
-      if (!val || val/total < 0.04) return; // skip tiny slices
+      if (!val || val/total < 0.05) return;
       var angle = arc.startAngle + (arc.endAngle - arc.startAngle) / 2;
-      var r = (arc.outerRadius + arc.innerRadius) / 2;
+      var outerR = arc.outerRadius, innerR = arc.innerRadius;
+      var r = innerR + (outerR - innerR) * 0.55;
       var x = arc.x + Math.cos(angle) * r;
       var y = arc.y + Math.sin(angle) * r;
+      var sliceH = (outerR - innerR);
+      if (sliceH < 12) return;
       ctx.save();
-      ctx.font = 'bold 9px Space Mono, monospace';
+      ctx.font = 'bold ' + Math.max(8, Math.min(11, Math.floor(sliceH * 0.38))) + 'px Space Mono, monospace';
       ctx.fillStyle = 'rgba(255,255,255,0.95)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
