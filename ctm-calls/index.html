@@ -593,31 +593,63 @@ function dowBars(elId, data) {
 // ═══════════════════════════════════════════════════════
 function buildCtrlBars() {
   const tabs = ['overview','agents','sources','heatmap','missed','newcallers','recordings','calllog','forms','marketing'];
-  tabs.forEach(tab => {
+  tabs.forEach(function(tab) {
     const el = document.getElementById('cb-'+tab);
     if (!el) return;
-    el.innerHTML = `<div class="ctrl-bar">
-      <div class="ctrl-group">
-        <button class="ctrl-btn ${FAC==='all'?'active':''}" onclick="setFac('all','${tab}')">All Facilities</button>
-        <button class="ctrl-btn ${FAC==='fw'?'active':''}"  onclick="setFac('fw','${tab}')">Fort Wayne</button>
-        <button class="ctrl-btn ${FAC==='wl'?'active':''}"  onclick="setFac('wl','${tab}')">Waterloo</button>
-      </div>
-      <div class="ctrl-sep">|</div>
-      <div class="ctrl-group">
-        <button class="ctrl-btn ${PERIOD==='7d'?'active':''}"  onclick="setPeriod('7d','${tab}')">7D</button>
-        <button class="ctrl-btn ${PERIOD==='30d'?'active':''}" onclick="setPeriod('30d','${tab}')">30D</button>
-        <button class="ctrl-btn ${PERIOD==='all'?'active':''}" onclick="setPeriod('all','${tab}')">ALL</button>
-      </div>
-      <div class="ctrl-sep">|</div>
-      <div class="ctrl-group">
-        <button class="ctrl-btn ${GRAN==='day'?'active':''}"   onclick="setGran('day','${tab}')">DAY</button>
-        <button class="ctrl-btn ${GRAN==='week'?'active':''}"  onclick="setGran('week','${tab}')">WEEK</button>
-        <button class="ctrl-btn ${GRAN==='month'?'active':''}" onclick="setGran('month','${tab}')">MONTH</button>
-      </div>
-    </div>`;
+    // Build buttons using DOM to avoid quote escaping issues
+    const bar = document.createElement('div');
+    bar.className = 'ctrl-bar';
+
+    // Facility group
+    const fg = document.createElement('div');
+    fg.className = 'ctrl-group';
+    [['all','All Facilities'],['fw','Fort Wayne'],['wl','Waterloo']].forEach(function(pair) {
+      const bf = document.createElement('button');
+      bf.className = 'ctrl-btn' + (FAC===pair[0]?' active':'');
+      bf.textContent = pair[1];
+      bf.onclick = (function(f,t){ return function(){ setFac(f,t); }; })(pair[0], tab);
+      fg.appendChild(bf);
+    });
+
+    // Separator
+    const s1 = document.createElement('div');
+    s1.className = 'ctrl-sep'; s1.textContent = '|';
+
+    // Period group
+    const pg = document.createElement('div');
+    pg.className = 'ctrl-group';
+    [['7d','7D'],['30d','30D'],['all','ALL']].forEach(function(pair) {
+      const bp = document.createElement('button');
+      bp.className = 'ctrl-btn' + (PERIOD===pair[0]?' active':'');
+      bp.textContent = pair[1];
+      bp.onclick = (function(p,t){ return function(){ setPeriod(p,t); }; })(pair[0], tab);
+      pg.appendChild(bp);
+    });
+
+    // Separator
+    const s2 = document.createElement('div');
+    s2.className = 'ctrl-sep'; s2.textContent = '|';
+
+    // Granularity group
+    const gg = document.createElement('div');
+    gg.className = 'ctrl-group';
+    [['day','DAY'],['week','WEEK'],['month','MONTH']].forEach(function(pair) {
+      const bg = document.createElement('button');
+      bg.className = 'ctrl-btn' + (GRAN===pair[0]?' active':'');
+      bg.textContent = pair[1];
+      bg.onclick = (function(g,t){ return function(){ setGran(g,t); }; })(pair[0], tab);
+      gg.appendChild(bg);
+    });
+
+    bar.appendChild(fg);
+    bar.appendChild(s1);
+    bar.appendChild(pg);
+    bar.appendChild(s2);
+    bar.appendChild(gg);
+    el.innerHTML = '';
+    el.appendChild(bar);
   });
 }
-
 function setFac(fac, tab)    { FAC=fac;    buildCtrlBars(); rebuildTab(tab); }
 function setPeriod(p, tab)   { PERIOD=p;   buildCtrlBars(); rebuildTab(tab); }
 function setGran(g, tab)     { GRAN=g;     buildCtrlBars(); rebuildTab(tab); }
