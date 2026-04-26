@@ -1342,18 +1342,19 @@ function renderNotes() {
     return facOk && (!q||(n.n+n.ag).toLowerCase().includes(q));
   });
   document.getElementById('notes-chip').textContent = ns.length+' NOTES';
-  document.getElementById('notes-tbody').innerHTML = ns.map((n,i) => {
+  document.getElementById('notes-tbody').innerHTML = ns.map(function(n,i) {
     const preview = n.n.length > 80 ? n.n.slice(0,80)+'…' : n.n;
     const hasMore = n.n.length > 80;
-    return `<tr class="note-row" id="note-${i}" onclick="toggleNote(${i})">
-      <td style="font-family:'Space Mono',monospace;font-size:10px;color:#6b7e96;white-space:nowrap;vertical-align:top;padding-top:10px">${n.dt}</td>
-      <td style="font-size:11px;font-weight:600;color:#0a3d5c;white-space:nowrap;vertical-align:top;padding-top:10px">${n.ag||'—'}</td>
-      <td style="vertical-align:top;padding-top:10px"><span class="${n.fa==='Fort Wayne'?'fac-fw':'fac-wl'}">${n.fa==='Fort Wayne'?'FW':'WL'}</span></td>
-      <td class="note-cell">
-        <span class="note-preview">${preview}${hasMore?'<span class="note-expand-icon">▼ expand</span>':''}</span>
-        ${hasMore?`<span class="note-full">${n.n}</span>`:''}
-      </td>
-    </tr>`;
+    const facCls  = n.fa==='Fort Wayne'?'fac-fw':'fac-wl';
+    const facLbl  = n.fa==='Fort Wayne'?'FW':'WL';
+    const expandSpan = hasMore ? '<span class="note-expand-icon">▼ expand</span>' : '';
+    const fullSpan   = hasMore ? '<span class="note-full">' + n.n + '</span>' : '';
+    return '<tr class="note-row" id="note-' + i + '" onclick="toggleNote(' + i + ')">'
+      + '<td style="font-family:Space Mono,monospace;font-size:10px;color:#6b7e96;white-space:nowrap;vertical-align:top;padding-top:10px">' + n.dt + '</td>'
+      + '<td style="font-size:11px;font-weight:600;color:#0a3d5c;white-space:nowrap;vertical-align:top;padding-top:10px">' + (n.ag||'—') + '</td>'
+      + '<td style="vertical-align:top;padding-top:10px"><span class="' + facCls + '">' + facLbl + '</span></td>'
+      + '<td class="note-cell"><span class="note-preview">' + preview + expandSpan + '</span>' + fullSpan + '</td>'
+      + '</tr>';
   }).join('');
 }
 
