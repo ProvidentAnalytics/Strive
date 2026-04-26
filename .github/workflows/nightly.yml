@@ -2,8 +2,8 @@ name: Nightly Dashboard Refresh
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # 6AM UTC = midnight-1AM Central
-  workflow_dispatch:         # Manual trigger from GitHub UI
+    - cron: "0 */4 * * *"   # Every 4 hours (midnight, 4AM, 8AM, noon, 4PM, 8PM UTC)
+  workflow_dispatch:          # Manual trigger from GitHub UI
 
 jobs:
   refresh:
